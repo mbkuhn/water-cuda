@@ -19,13 +19,9 @@ central2d_t* central2d_init(float w, float h, int nx, int ny,
 {
     // We extend to a four cell buffer to avoid BC comm on odd time steps
     int ng = 4;
-    int nx_all = nx + 2*ng;
-    int ny_all = ny + 2*ng;
-    int nc = nx_all * ny_all;
-    int N  = nfield * nc;
 
     central2d_t* sim;
-    cudaMallocManaged(&sim,sizeof(central2d_t)+(4*N+6*nx_all)*sizeof(float));
+    cudaMalloc(&sim,sizeof(central2d_t));
     sim->nx = nx;
     sim->ny = ny;
     sim->ng = ng;
@@ -35,6 +31,19 @@ central2d_t* central2d_init(float w, float h, int nx, int ny,
     sim->flux = flux;
     sim->speed = speed;
     sim->cfl = cfl;
+
+    int nx_all = nx + 2*ng;
+    int ny_all = ny + 2*ng;
+    int nc = nx_all * ny_all;
+    int N  = nfield * nc;
+    //sim->u  = (float*) malloc((4*N + 6*nx_all)* sizeof(float));
+    //float * sim->u;
+    cudaMalloc((float*)&sim->u,(4*N + 6*nx_all)*sizeof(float));
+    sim->v  = sim->u +   N;
+    sim->f  = sim->u + 2*N;
+    sim->g  = sim->u + 3*N;
+    sim->scratch = sim->u + 4*N;
+
 
     //int nx_all = nx + 2*ng;
     //int ny_all = ny + 2*ng;
@@ -50,10 +59,6 @@ central2d_t* central2d_init(float w, float h, int nx, int ny,
     //float* sim->u;
     //cudaMallocManaged(&(sim->u), (4*N+6*nx_all)*sizeof(float));
     //float* sim->u;
-    sim->v = sim->u + N;
-    sim->f = sim->u + 2*N;
-    sim->g = sim->u + 3*N;
-    sim->scratch = sim-> + 4*N;
 
     return sim;
 }
@@ -63,6 +68,8 @@ void central2d_free(central2d_t* sim)
 {
     cudaFree(sim->u);
     cudaFree(sim);
+    //cudaFree(sim->u);
+    //cudaFree(sim);
 }
 
 
@@ -388,8 +395,9 @@ int central2d_xrun(float* __restrict__ u, float* __restrict__ v,
     while (!done) {
         float cxy[2] = {1.0e-15f, 1.0e-15f};
         central2d_periodic(u, nx, ny, ng, nfield);
-	speed <<<1,nx_all*ny_all>>> (cxy, u, nx_all * ny_all, nx_all * ny_all);
-        cudaDeviceSynchronize();
+	speed(cxy, u, nx_all * ny_all, nx_all * ny_all);
+        //<<1,1>>
+	//cudaDeviceSynchronize();
 	float dt = cfl / fmaxf(cxy[0]/dx, cxy[1]/dy);
         if (t + 2*dt >= tfinal) {
             dt = (tfinal-t)/2;

@@ -44,7 +44,7 @@ void shallow2dv_flux(float* __restrict__ fh,
 }
 
 
-__device__
+//__device__
 static
 void shallow2dv_speed(float* __restrict__ cxy,
                       const float* __restrict__ h,
@@ -55,8 +55,8 @@ void shallow2dv_speed(float* __restrict__ cxy,
 {
     float cx = cxy[0];
     float cy = cxy[1];
-    //for (int i = 0; i < ncell; ++i) {
-    for (int i = (threadIdx.x-1)*(ncell-1+blockDim.x)/blockDim.x; i < min(threadIdx.x*(ncell-1+blockDim.x)/blockDim.x,ncell); ++i) {
+    for (int i = 0; i < ncell; ++i) {
+    //for (int i = (threadIdx.x-1)*(ncell-1+blockDim.x)/blockDim.x; i < min(threadIdx.x*(ncell-1+blockDim.x)/blockDim.x,ncell); ++i) {
 	float hi = h[i];
         float inv_hi = 1.0f/h[i];
         float root_gh = sqrtf(g * hi);
@@ -80,7 +80,7 @@ void shallow2d_flux(float* FU, float* GU, const float* U,
 }
 
 
-__global__
+//__global__
 void shallow2d_speed(float* cxy, const float* U,
                      int ncell, int field_stride)
 {

@@ -7,7 +7,7 @@ include ../config/Makefile.in.$(PLATFORM)
 lshallow: ldriver.o shallow2d.o stepper.o
 	$(NVCC) $(NVCCFLAGS) $(LUA_CFLAGS) -o $@ $^ $(LUA_LIBS) $(LIBS)
 
-ldriver.o: ldriver.c shallow2d.h
+ldriver.o: ldriver.cu shallow2d.h
 	$(NVCC) $(NVCCFLAGS) $(LUA_CFLAGS) -c $<
 
 shallow2d.o: shallow2d.cu
