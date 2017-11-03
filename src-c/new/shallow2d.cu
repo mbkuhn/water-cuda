@@ -8,7 +8,7 @@
  * The actually work of computing the fluxes and speeds is done
  * by local (`static`) helper functions that take as arguments
  * pointers to all the individual fields.  This is helpful to the
- * compilers, since by specifying the `__restrict__` keyword, we are
+ * compilers, since by specifying the `restrict` keyword, we are
  * promising that we will not access the field data through the
  * wrong pointer.  This lets the compiler do a better job with
  * vectorization.
@@ -31,8 +31,8 @@ void shallow2dv_flux(float* __restrict__ fh,
                      float g,
                      int ncell)
 {
-    cudaMemcpy(fh, hu, ncell * sizeof(float),cudaMemcpyDeviceToDevice);
-    cudaMemcpy(gh, hv, ncell * sizeof(float),cudaMemcpyDeviceToDevice);
+    memcpy(fh, hu, ncell * sizeof(float));
+    memcpy(gh, hv, ncell * sizeof(float));
     for (int i = 0; i < ncell; ++i) {
         float hi = h[i], hui = hu[i], hvi = hv[i];
         float inv_h = 1/hi;
@@ -44,6 +44,7 @@ void shallow2dv_flux(float* __restrict__ fh,
 }
 
 
+//__device__
 static
 void shallow2dv_speed(float* __restrict__ cxy,
                       const float* __restrict__ h,
@@ -55,7 +56,8 @@ void shallow2dv_speed(float* __restrict__ cxy,
     float cx = cxy[0];
     float cy = cxy[1];
     for (int i = 0; i < ncell; ++i) {
-        float hi = h[i];
+    //for (int i = (threadIdx.x-1)*(ncell-1+blockDim.x)/blockDim.x; i < min(threadIdx.x*(ncell-1+blockDim.x)/blockDim.x,ncell); ++i) {
+	float hi = h[i];
         float inv_hi = 1.0f/h[i];
         float root_gh = sqrtf(g * hi);
         float cxi = fabsf(hu[i] * inv_hi) + root_gh;
@@ -78,6 +80,7 @@ void shallow2d_flux(float* FU, float* GU, const float* U,
 }
 
 
+//__global__
 void shallow2d_speed(float* cxy, const float* U,
                      int ncell, int field_stride)
 {

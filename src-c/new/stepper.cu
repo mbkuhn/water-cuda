@@ -20,9 +20,9 @@ central2d_t* central2d_init(float w, float h, int nx, int ny,
     // We extend to a four cell buffer to avoid BC comm on odd time steps
     int ng = 4;
 
-    //central2d_t* sim = (central2d_t*) malloc(sizeof(central2d_t));
-    central2d_t* sim;
-    cudaMallocManaged(&sim,sizeof(central2d_t));
+    //central2d_t* sim;
+    //cudaMallocManaged(&sim,sizeof(central2d_t));
+    central2d_t* sim = (central2d_t*) malloc(sizeof(central2d_t));
     sim->nx = nx;
     sim->ny = ny;
     sim->ng = ng;
@@ -38,11 +38,29 @@ central2d_t* central2d_init(float w, float h, int nx, int ny,
     int nc = nx_all * ny_all;
     int N  = nfield * nc;
     //sim->u  = (float*) malloc((4*N + 6*nx_all)* sizeof(float));
-    cudaMalloc(&sim->u,(4*N+6*nx_all)*sizeof(float));
+    //float * sim->u;
+    //cudaMallocManaged(&sim->u,(4*N + 6*nx_all)*sizeof(float));
+    sim->u = (float*) malloc((4*N + 6*nx_all));
     sim->v  = sim->u +   N;
     sim->f  = sim->u + 2*N;
     sim->g  = sim->u + 3*N;
     sim->scratch = sim->u + 4*N;
+
+
+    //int nx_all = nx + 2*ng;
+    //int ny_all = ny + 2*ng;
+    //int nc = nx_all * ny_all;
+    //int N  = nfield * nc;
+    //sim->u  = (float*) malloc((4*N + 6*nx_all)* sizeof(float));
+    //float* sim->u;
+    //cudaMallocManaged(&u, (4*N+6*nx_all)* sizeof(float));
+    //sim->v  = sim->u +   N;
+    //sim->f  = sim->u + 2*N;
+    //sim->g  = sim->u + 3*N;
+    //sim->scratch = sim->u + 4*N;
+    //float* sim->u;
+    //cudaMallocManaged(&(sim->u), (4*N+6*nx_all)*sizeof(float));
+    //float* sim->u;
 
     return sim;
 }
@@ -50,10 +68,10 @@ central2d_t* central2d_init(float w, float h, int nx, int ny,
 
 void central2d_free(central2d_t* sim)
 {
-    //cudaFree(sim->u);
     free(sim->u);
-    //cudaFree(sim);
     free(sim);
+    //cudaFree(sim->u);
+    //cudaFree(sim);
 }
 
 
@@ -380,7 +398,9 @@ int central2d_xrun(float* __restrict__ u, float* __restrict__ v,
         float cxy[2] = {1.0e-15f, 1.0e-15f};
         central2d_periodic(u, nx, ny, ng, nfield);
 	speed(cxy, u, nx_all * ny_all, nx_all * ny_all);
-        float dt = cfl / fmaxf(cxy[0]/dx, cxy[1]/dy);
+        //<<1,1>>
+	//cudaDeviceSynchronize();
+	float dt = cfl / fmaxf(cxy[0]/dx, cxy[1]/dy);
         if (t + 2*dt >= tfinal) {
             dt = (tfinal-t)/2;
             done = true;
