@@ -38,7 +38,7 @@ central2d_t* central2d_init(float w, float h, int nx, int ny,
     int nc = nx_all * ny_all;
     int N  = nfield * nc;
     //sim->u  = (float*) malloc((4*N + 6*nx_all)* sizeof(float));
-    cudaMalloc(&sim->u,(4*N+6*nx_all)*sizeof(float));
+    cudaMallocManaged(&sim->u,(4*N+6*nx_all)*sizeof(float));
     sim->v  = sim->u +   N;
     sim->f  = sim->u + 2*N;
     sim->g  = sim->u + 3*N;
@@ -50,10 +50,10 @@ central2d_t* central2d_init(float w, float h, int nx, int ny,
 
 void central2d_free(central2d_t* sim)
 {
-    //cudaFree(sim->u);
-    free(sim->u);
-    //cudaFree(sim);
-    free(sim);
+    cudaFree(sim->u);
+    //free(sim->u);
+    cudaFree(sim);
+    //free(sim);
 }
 
 

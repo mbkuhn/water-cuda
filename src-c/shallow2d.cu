@@ -31,8 +31,8 @@ void shallow2dv_flux(float* __restrict__ fh,
                      float g,
                      int ncell)
 {
-    cudaMemcpy(fh, hu, ncell * sizeof(float),cudaMemcpyDeviceToDevice);
-    cudaMemcpy(gh, hv, ncell * sizeof(float),cudaMemcpyDeviceToDevice);
+    cudaMemcpy(fh, hu, ncell * sizeof(float),cudaMemcpyHostToHost);
+    cudaMemcpy(gh, hv, ncell * sizeof(float),cudaMemcpyHostToHost);
     for (int i = 0; i < ncell; ++i) {
         float hi = h[i], hui = hu[i], hvi = hv[i];
         float inv_h = 1/hi;
