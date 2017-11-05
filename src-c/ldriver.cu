@@ -57,8 +57,8 @@ void solution_check(central2d_t* sim)
     h_sum *= cell_area;
     hu_sum *= cell_area;
     hv_sum *= cell_area;
-    //printf("-\n  Volume: %g\n  Momentum: (%g, %g)\n  Range: [%g, %g]\n",
-    //       h_sum, hu_sum, hv_sum, hmin, hmax);
+    printf("-\n  Volume: %g\n  Momentum: (%g, %g)\n  Range: [%g, %g]\n",
+           h_sum, hu_sum, hv_sum, hmin, hmax);
     assert(hmin > 0);
 }
 

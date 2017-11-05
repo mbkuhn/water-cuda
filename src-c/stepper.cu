@@ -9,7 +9,7 @@
 #include <stdio.h>
 
 #define nblocks 1
-#define nthreads 1024
+#define nthreads 640
 
 //ldoc on
 /**
@@ -239,14 +239,17 @@ void central2d_predict(float* __restrict__ v,
     float* __restrict__ fx = scratch;
     float* __restrict__ gy = scratch+nx;
     for (int k = 0; k < nfield; ++k) {
-        for (int iy = 1; iy < ny-1; ++iy) {
-            int offset = (k*ny+iy)*nx+1;
-            limited_deriv1(fx+1, f+offset, nx-2);
-            limited_derivk(gy+1, g+offset, nx-2, nx);
-            for (int ix = 1; ix < nx-1; ++ix) {
-                int offset = (k*ny+iy)*nx+ix;
-                v[offset] = u[offset] - dtcdx2 * fx[ix] - dtcdy2 * gy[ix];
-            }
+	int ntmp = (ny-1) + nthreads-(ny-1)%nthreads;
+        for (int iy = threadIdx.x/nthreads; iy < (threadIdx.x+1)/nthreads*ntmp; ++iy) {
+	    if (iy < ny-1) {
+               int offset = (k*ny+iy)*nx+1;
+               limited_deriv1(fx+1, f+offset, nx-2);
+               limited_derivk(gy+1, g+offset, nx-2, nx);
+               for (int ix = 1; ix < nx-1; ++ix) {
+                   int offset = (k*ny+iy)*nx+ix;
+                   v[offset] = u[offset] - dtcdx2 * fx[ix] - dtcdy2 * gy[ix];
+               }
+	    }
         }
     }
 }
@@ -265,15 +268,24 @@ void central2d_correct_sd(float* __restrict__ s,
                           float dtcdx2, float dtcdy2,
                           int xlo, int xhi)
 {
-    for (int ix = xlo; ix < xhi; ++ix)
-        s[ix] =
-            0.2500f * (u [ix] + u [ix+1]) +
-            0.0625f * (ux[ix] - ux[ix+1]) +
-            dtcdx2  * (f [ix] - f [ix+1]);
-    for (int ix = xlo; ix < xhi; ++ix)
-        d[ix] =
-            0.0625f * (uy[ix] + uy[ix+1]) +
-            dtcdy2  * (g [ix] + g [ix+1]);
+    int ntmp = (xhi-xlo) + nthreads-(xhi-xlo)%nthreads;
+    for (int iix = threadIdx.x/nthreads*ntmp; iix < (threadIdx.x+1)/nthreads*ntmp; ++iix) {
+	int ix = xlo + iix;
+        if (ix < xhi) {
+           s[ix] =
+               0.2500f * (u [ix] + u [ix+1]) +
+               0.0625f * (ux[ix] - ux[ix+1]) +
+               dtcdx2  * (f [ix] - f [ix+1]);
+	}
+    }
+    for (int iix = threadIdx.x/nthreads*ntmp; iix < (threadIdx.x+1)/nthreads*ntmp; ++iix) {
+        int ix = xlo + iix;
+	if (ix < xhi) {
+           d[ix] =
+               0.0625f * (uy[ix] + uy[ix+1]) +
+               dtcdy2  * (g [ix] + g [ix+1]);
+	}
+    }
 }
 
 

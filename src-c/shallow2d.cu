@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 #define nblocks 1
-#define nthreads 1024
+#define nthreads 640
 
 //ldoc on
 /**
@@ -38,7 +38,8 @@ void shallow2dv_flux(float* __restrict__ fh,
 {
     memcpy(fh, hu, ncell * sizeof(float));//,cudaMemcpyHostToHost);
     memcpy(gh, hv, ncell * sizeof(float));//,cudaMemcpyHostToHost);
-    for (int i = threadIdx.x/nthreads; i < (threadIdx.x+1)/nthreads*ncell; ++i) {
+    int ntmp = ncell + nthreads-ncell%nthreads;
+    for (int i = threadIdx.x/nthreads; i < (threadIdx.x+1)/nthreads*ntmp; ++i) {
         if (i < ncell) {
            float hi = h[i], hui = hu[i], hvi = hv[i];
            float inv_h = 1/hi;
@@ -62,7 +63,8 @@ void shallow2dv_speed(float* __restrict__ cxy,
 {
     float cx = cxy[0];
     float cy = cxy[1];
-    for (int i = threadIdx.x/nthreads; i < (threadIdx.x+1)/nthreads*ncell; ++i) {
+    int ntmp = ncell + nthreads-ncell%nthreads;
+    for (int i = threadIdx.x/nthreads; i < (threadIdx.x+1)/nthreads*ntmp; ++i) {
 	if (i < ncell) {
            float hi = h[i];
            float inv_hi = 1.0f/h[i];
