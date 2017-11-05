@@ -8,6 +8,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#define nblocks 1
+#define nthreads 1024
+
 //ldoc on
 /**
  * ## Implementation
@@ -405,7 +408,7 @@ int central2d_xrun(float* __restrict__ u, float* __restrict__ v,
     float * d_dt; cudaMalloc((void **)&d_dt, sizeof(float));
     while (!done) {
         float cxy[2] = {1.0e-15f, 1.0e-15f};
-	central2d_periodic<<<1,1>>>(u, nx, ny, ng, nfield);
+	central2d_periodic<<<nblocks,nthreads>>>(u, nx, ny, ng, nfield);
 	printf("periodic:\t%s\n", cudaGetErrorString(cudaGetLastError()));
 	cudaDeviceSynchronize();
 	printf("periodic sync:\t%s\n", cudaGetErrorString(cudaGetLastError()));
@@ -413,7 +416,7 @@ int central2d_xrun(float* __restrict__ u, float* __restrict__ v,
 	cudaMemcpy(d_cxy,&cxy,2*sizeof(float),cudaMemcpyHostToDevice);
 	printf("cxy host to device:\t%s\n", cudaGetErrorString(cudaGetLastError()));
 
-	central2d_speed<<<1,1>>>(speed, d_cxy, u, nx_all * ny_all, nx_all * ny_all);
+	central2d_speed<<<nblocks,nthreads>>>(speed, d_cxy, u, nx_all * ny_all, nx_all * ny_all);
         printf("speed:\t%s\n", cudaGetErrorString(cudaGetLastError()));
 	cudaDeviceSynchronize();
 	printf("speed sync:\t%s\n", cudaGetErrorString(cudaGetLastError()));	
@@ -427,7 +430,7 @@ int central2d_xrun(float* __restrict__ u, float* __restrict__ v,
             done = true;
         }
 	cudaMemcpy(d_dt, &dt, sizeof(float), cudaMemcpyHostToDevice);
-	central2d_step<<<1,1>>>(u, v, scratch, f, g,
+	central2d_step<<<nblocks,nthreads>>>(u, v, scratch, f, g,
                        0, nx+4, ny+4, ng-2,
                        nfield, flux, speed,
                        d_dt, dx, dy);
@@ -435,7 +438,7 @@ int central2d_xrun(float* __restrict__ u, float* __restrict__ v,
 	cudaDeviceSynchronize();
 	printf("1st step sync:\t%s\n", cudaGetErrorString(cudaGetLastError()));
 
-        central2d_step<<<1,1>>>(v, u, scratch, f, g,
+        central2d_step<<<nblocks,nthreads>>>(v, u, scratch, f, g,
                        1, nx, ny, ng,
                        nfield, flux, speed,
                        d_dt, dx, dy);
