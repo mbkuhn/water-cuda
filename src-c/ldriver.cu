@@ -35,11 +35,15 @@
 
 void solution_check(central2d_t* sim)
 {
+    //printf("beginning of solution_check\n");
     int nx = sim->nx, ny = sim->ny;
+    //printf("before u pointer is defined\n");
     float* u = sim->u;
     float h_sum = 0, hu_sum = 0, hv_sum = 0;
+    //printf("before first u access\n");
     float hmin = u[central2d_offset(sim,0,0,0)];
     float hmax = hmin;
+    //printf("before solution check loop\n");
     for (int j = 0; j < ny; ++j)
         for (int i = 0; i < nx; ++i) {
             float h = u[central2d_offset(sim,0,i,j)];
@@ -53,8 +57,8 @@ void solution_check(central2d_t* sim)
     h_sum *= cell_area;
     hu_sum *= cell_area;
     hv_sum *= cell_area;
-    printf("-\n  Volume: %g\n  Momentum: (%g, %g)\n  Range: [%g, %g]\n",
-           h_sum, hu_sum, hv_sum, hmin, hmax);
+    //printf("-\n  Volume: %g\n  Momentum: (%g, %g)\n  Range: [%g, %g]\n",
+    //       h_sum, hu_sum, hv_sum, hmin, hmax);
     assert(hmin > 0);
 }
 
@@ -234,10 +238,31 @@ int run_sim(lua_State* L)
         gettimeofday(&t1, NULL);
         double elapsed = (t1.tv_sec-t0.tv_sec) + (t1.tv_usec-t0.tv_usec)*1e-6;
 #else
-        int nstep = central2d_run(sim, ftime);
-        double elapsed = 0;
+        printf("before central2d_run\n");
+	//int nstep = 
+	printf("ftime %e\n", ftime);
+	//double * d_ftime; cudaMalloc((void **) &d_ftime,sizeof(double));
+	//cudaMemcpy(d_ftime,&ftime,sizeof(double),cudaMemcpyHostToDevice);
+	//printf("Host Variable Copying:\t%s\n", cudaGetErrorString(cudaGetLastError()));
+	
+	//int * d_nstep; cudaMalloc((void **) &d_nstep,sizeof(int));
+	//cudaMemcpy(d_nstep,&nstep, sizeof(int),cudaMemcpyHostToDevice);
+	//printf("Host Variable Copying:\t%s\n", cudaGetErrorString(cudaGetLastError()));
+	
+	int nstep = central2d_run(sim,ftime);
+	//central2d_run<<<1,1>>>(sim, d_ftime, d_nstep);
+	//printf("central2d_run:\t%s\n", cudaGetErrorString(cudaGetLastError()));
+	//cudaDeviceSynchronize();
+	//printf("central2d_run syncing:\t%s\n", cudaGetErrorString(cudaGetLastError()));
+
+	//cudaMemcpy(&nstep, d_nstep, sizeof(int), cudaMemcpyDeviceToHost);
+	//printf("Device Variable Copying:\t%s\n", cudaGetErrorString(cudaGetLastError()));
+        
+	double elapsed = 0;
+	printf("nstep %d\n",nstep);
+	//cudaFree(d_nstep); cudaFree(d_ftime);
 #endif
-        solution_check(sim);
+        //solution_check(sim);
         tcompute += elapsed;
         printf("  Time: %e (%e for %d steps)\n", elapsed, elapsed/nstep, nstep);
         //viz_frame(viz, sim);
@@ -245,7 +270,9 @@ int run_sim(lua_State* L)
     printf("Total compute time: %e\n", tcompute);
 
     //viz_close(viz);
+    printf("Before 2d_free\n");
     central2d_free(sim);
+    printf("after 2d_free\n");
     return 0;
 }
 

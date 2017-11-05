@@ -1,5 +1,6 @@
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
 
 //ldoc on
 /**
@@ -19,6 +20,7 @@ static const float g = 9.8;
 
 
 static
+__device__
 void shallow2dv_flux(float* __restrict__ fh,
                      float* __restrict__ fhu,
                      float* __restrict__ fhv,
@@ -31,8 +33,8 @@ void shallow2dv_flux(float* __restrict__ fh,
                      float g,
                      int ncell)
 {
-    cudaMemcpy(fh, hu, ncell * sizeof(float),cudaMemcpyHostToHost);
-    cudaMemcpy(gh, hv, ncell * sizeof(float),cudaMemcpyHostToHost);
+    memcpy(fh, hu, ncell * sizeof(float));//,cudaMemcpyHostToHost);
+    memcpy(gh, hv, ncell * sizeof(float));//,cudaMemcpyHostToHost);
     for (int i = 0; i < ncell; ++i) {
         float hi = h[i], hui = hu[i], hvi = hv[i];
         float inv_h = 1/hi;
@@ -45,6 +47,7 @@ void shallow2dv_flux(float* __restrict__ fh,
 
 
 static
+__device__
 void shallow2dv_speed(float* __restrict__ cxy,
                       const float* __restrict__ h,
                       const float* __restrict__ hu,
@@ -67,7 +70,7 @@ void shallow2dv_speed(float* __restrict__ cxy,
     cxy[1] = cy;
 }
 
-
+__device__
 void shallow2d_flux(float* FU, float* GU, const float* U,
                     int ncell, int field_stride)
 {
@@ -77,7 +80,7 @@ void shallow2d_flux(float* FU, float* GU, const float* U,
                     g, ncell);
 }
 
-
+__device__
 void shallow2d_speed(float* cxy, const float* U,
                      int ncell, int field_stride)
 {

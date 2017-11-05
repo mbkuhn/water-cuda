@@ -90,7 +90,8 @@ int  central2d_offset(central2d_t* sim, int k, int ix, int iy);
  * at the reference grid.
  *
  */
-int central2d_run(central2d_t* sim, float tfinal);
+
+int central2d_run(central2d_t* sim, double tfinal);
 
 /**
  * ### Applying boundary conditions
@@ -106,6 +107,7 @@ int central2d_run(central2d_t* sim, float tfinal);
  * for applying the BCs.
  *
  */
+__global__
 void central2d_periodic(float* u, int nx, int ny, int ng, int nfield);
 
 //ldoc off
