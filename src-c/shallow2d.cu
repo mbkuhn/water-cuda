@@ -2,6 +2,9 @@
 #include <math.h>
 #include <stdio.h>
 
+#define nblocks 1
+#define nthreads 32
+
 //ldoc on
 /**
  * ## Implementation
@@ -35,14 +38,19 @@ void shallow2dv_flux(float* __restrict__ fh,
 {
     memcpy(fh, hu, ncell * sizeof(float));//,cudaMemcpyHostToHost);
     memcpy(gh, hv, ncell * sizeof(float));//,cudaMemcpyHostToHost);
-    for (int i = 0; i < ncell; ++i) {
-        float hi = h[i], hui = hu[i], hvi = hv[i];
-        float inv_h = 1/hi;
-        fhu[i] = hui*hui*inv_h + (0.5f*g)*hi*hi;
-        fhv[i] = hui*hvi*inv_h;
-        ghu[i] = hui*hvi*inv_h;
-        ghv[i] = hvi*hvi*inv_h + (0.5f*g)*hi*hi;
+    //int ntmp = ncell + nthreads-ncell%nthreads;
+    for (int i = threadIdx.x; i < ncell; i+=blockDim.x) {
+    //for (int i = threadIdx.x/nthreads; i < (threadIdx.x+1)/nthreads*ntmp; ++i) {
+        //if (i < ncell) {
+            float hi = h[i], hui = hu[i], hvi = hv[i];
+            float inv_h = 1/hi;
+            fhu[i] = hui*hui*inv_h + (0.5f*g)*hi*hi;
+            fhv[i] = hui*hvi*inv_h;
+            ghu[i] = hui*hvi*inv_h;
+            ghv[i] = hvi*hvi*inv_h + (0.5f*g)*hi*hi;
+	//}
     }
+    __syncthreads();
 }
 
 
@@ -55,22 +63,26 @@ void shallow2dv_speed(float* __restrict__ cxy,
                       float g,
                       int ncell)
 {
-    float cx = cxy[0];
-    float cy = cxy[1];
-    for (int i = 0; i < ncell; ++i) {
-        float hi = h[i];
-        float inv_hi = 1.0f/h[i];
-        float root_gh = sqrtf(g * hi);
-        float cxi = fabsf(hu[i] * inv_hi) + root_gh;
-        float cyi = fabsf(hv[i] * inv_hi) + root_gh;
-        if (cx < cxi) cx = cxi;
-        if (cy < cyi) cy = cyi;
+    float cx = cxy[2*threadIdx.x+0];
+    float cy = cxy[2*threadIdx.x+1];
+    //int ntmp = ncell + nthreads-ncell%nthreads;
+    for (int i = threadIdx.x; i < ncell; i+=blockDim.x) {
+    //for (int i = threadIdx.x/nthreads; i < (threadIdx.x+1)/nthreads*ntmp; ++i) {
+    //    if (i < ncell) {
+	     float hi = h[i];
+             float inv_hi = 1.0f/h[i];
+             float root_gh = sqrtf(g * hi);
+             float cxi = fabsf(hu[i] * inv_hi) + root_gh;
+             float cyi = fabsf(hv[i] * inv_hi) + root_gh;
+             if (cx < cxi) cx = cxi;
+             if (cy < cyi) cy = cyi;
+    //	}
     }
-    cxy[0] = cx;
-    cxy[1] = cy;
+    cxy[2*threadIdx.x+0] = cx;
+    cxy[2*threadIdx.x+1] = cy;
 }
 
-__device__
+__global__
 void shallow2d_flux(float* FU, float* GU, const float* U,
                     int ncell, int field_stride)
 {

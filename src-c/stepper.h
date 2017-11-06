@@ -91,7 +91,7 @@ int  central2d_offset(central2d_t* sim, int k, int ix, int iy);
  *
  */
 
-int central2d_run(central2d_t* sim, double tfinal);
+int central2d_run(central2d_t* sim, double tfinal, float * d_cxy, float * d_dtcdx2, float * d_dtcdy2);
 
 /**
  * ### Applying boundary conditions

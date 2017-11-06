@@ -14,6 +14,9 @@
 #include <assert.h>
 #include <stdio.h>
 
+#define nblocks 1
+#define nthreads 32
+
 //ldoc on
 /**
  * # Driver code
@@ -57,8 +60,8 @@ void solution_check(central2d_t* sim)
     h_sum *= cell_area;
     hu_sum *= cell_area;
     hv_sum *= cell_area;
-    //printf("-\n  Volume: %g\n  Momentum: (%g, %g)\n  Range: [%g, %g]\n",
-    //       h_sum, hu_sum, hv_sum, hmin, hmax);
+    printf("-\n  Volume: %g\n  Momentum: (%g, %g)\n  Range: [%g, %g]\n",
+           h_sum, hu_sum, hv_sum, hmin, hmax);
     assert(hmin > 0);
 }
 
@@ -224,6 +227,9 @@ int run_sim(lua_State* L)
     solution_check(sim);
     //viz_frame(viz, sim);
 
+    float * d_cxy; cudaMalloc((void **)&d_cxy, 2*nthreads*sizeof(float));
+    float * d_dtcdx2; cudaMalloc((void**) &d_dtcdx2,sizeof(float));
+    float * d_dtcdy2; cudaMalloc((void**) &d_dtcdy2,sizeof(float));
     double tcompute = 0;
     for (int i = 0; i < frames; ++i) {
 #ifdef _OPENMP
@@ -234,41 +240,24 @@ int run_sim(lua_State* L)
 #elif defined SYSTIME
         struct timeval t0, t1;
         gettimeofday(&t0, NULL);
-        int nstep = central2d_run(sim, ftime);
+        int nstep = central2d_run(sim, ftime, d_cxy,d_dtcdx2,d_dtcdy2);
         gettimeofday(&t1, NULL);
         double elapsed = (t1.tv_sec-t0.tv_sec) + (t1.tv_usec-t0.tv_usec)*1e-6;
 #else
-        printf("before central2d_run\n");
-	//int nstep = 
 	printf("ftime %e\n", ftime);
-	//double * d_ftime; cudaMalloc((void **) &d_ftime,sizeof(double));
-	//cudaMemcpy(d_ftime,&ftime,sizeof(double),cudaMemcpyHostToDevice);
-	//printf("Host Variable Copying:\t%s\n", cudaGetErrorString(cudaGetLastError()));
-	
-	//int * d_nstep; cudaMalloc((void **) &d_nstep,sizeof(int));
-	//cudaMemcpy(d_nstep,&nstep, sizeof(int),cudaMemcpyHostToDevice);
-	//printf("Host Variable Copying:\t%s\n", cudaGetErrorString(cudaGetLastError()));
-	
-	int nstep = central2d_run(sim,ftime);
-	//central2d_run<<<1,1>>>(sim, d_ftime, d_nstep);
-	//printf("central2d_run:\t%s\n", cudaGetErrorString(cudaGetLastError()));
-	//cudaDeviceSynchronize();
-	//printf("central2d_run syncing:\t%s\n", cudaGetErrorString(cudaGetLastError()));
-
-	//cudaMemcpy(&nstep, d_nstep, sizeof(int), cudaMemcpyDeviceToHost);
-	//printf("Device Variable Copying:\t%s\n", cudaGetErrorString(cudaGetLastError()));
-        
+	int nstep = central2d_run(sim,ftime, d_cxy,d_dtcdx2,d_dtcdy2);
 	double elapsed = 0;
 	printf("nstep %d\n",nstep);
-	//cudaFree(d_nstep); cudaFree(d_ftime);
 #endif
-        //solution_check(sim);
+        solution_check(sim);
         tcompute += elapsed;
         printf("  Time: %e (%e for %d steps)\n", elapsed, elapsed/nstep, nstep);
         //viz_frame(viz, sim);
     }
     printf("Total compute time: %e\n", tcompute);
 
+
+    cudaFree(d_cxy);cudaFree(d_dtcdx2);cudaFree(d_dtcdy2);
     //viz_close(viz);
     printf("Before 2d_free\n");
     central2d_free(sim);

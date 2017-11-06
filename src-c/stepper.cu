@@ -8,6 +8,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#define nblocks 1
+#define nthreads 32
+
 //ldoc on
 /**
  * ## Implementation
@@ -171,8 +174,13 @@ void limited_deriv1(float* __restrict__ du,
                     const float* __restrict__ u,
                     int ncell)
 {
-    for (int i = 0; i < ncell; ++i)
-        du[i] = limdiff(u[i-1], u[i], u[i+1]);
+    //int ntmp = ncell + nthreads-ncell%nthreads;
+    //for (int i = threadIdx.x/nthreads; i < (threadIdx.x+1)/nthreads*ntmp; ++i) {
+    for (int i = threadIdx.x; i < ncell; i+=blockDim.x) {
+        //if (i < ncell) {
+            du[i] = limdiff(u[i-1], u[i], u[i+1]);
+	//}
+    }
 }
 
 
@@ -184,8 +192,13 @@ void limited_derivk(float* __restrict__ du,
                     int ncell, int stride)
 {
     assert(stride > 0);
-    for (int i = 0; i < ncell; ++i)
-        du[i] = limdiff(u[i-stride], u[i], u[i+stride]);
+    //int ntmp = ncell + nthreads-ncell%nthreads;
+    for (int i = threadIdx.x; i < ncell; i+=blockDim.x) {
+    //for (int i = threadIdx.x/nthreads; i < (threadIdx.x+1)/nthreads*ntmp; ++i) {
+        //if (i < ncell) {
+            du[i] = limdiff(u[i-stride], u[i], u[i+stride]);
+	//}
+    }
 }
 
 
@@ -224,26 +237,34 @@ void limited_derivk(float* __restrict__ du,
 
 // Predictor half-step
 static
-__device__
+__global__
 void central2d_predict(float* __restrict__ v,
                        float* __restrict__ scratch,
                        const float* __restrict__ u,
                        const float* __restrict__ f,
                        const float* __restrict__ g,
-                       float dtcdx2, float dtcdy2,
+                       float * d_dtcdx2, float * d_dtcdy2,
                        int nx, int ny, int nfield)
 {
+    float dtcdx2 = *d_dtcdx2; float dtcdy2 = *d_dtcdy2;
     float* __restrict__ fx = scratch;
     float* __restrict__ gy = scratch+nx;
     for (int k = 0; k < nfield; ++k) {
         for (int iy = 1; iy < ny-1; ++iy) {
             int offset = (k*ny+iy)*nx+1;
             limited_deriv1(fx+1, f+offset, nx-2);
+	    __syncthreads();
             limited_derivk(gy+1, g+offset, nx-2, nx);
-            for (int ix = 1; ix < nx-1; ++ix) {
+	    __syncthreads();
+	    //int ntmp = (nx-1) + nthreads-(nx-1)%nthreads;
+	    //for (int ix = threadIdx.x/nthreads*ntmp; ix < (threadIdx.x+1)/nthreads*ntmp; ++ix) {
+	    for (int ix = threadIdx.x; ix < nx-1; ix+=blockDim.x) {
+        	//if (ix < nx-1) {
                 int offset = (k*ny+iy)*nx+ix;
                 v[offset] = u[offset] - dtcdx2 * fx[ix] - dtcdy2 * gy[ix];
-            }
+		//}
+	    }
+	    __syncthreads();
         }
     }
 }
@@ -262,32 +283,45 @@ void central2d_correct_sd(float* __restrict__ s,
                           float dtcdx2, float dtcdy2,
                           int xlo, int xhi)
 {
-    for (int ix = xlo; ix < xhi; ++ix)
-        s[ix] =
-            0.2500f * (u [ix] + u [ix+1]) +
-            0.0625f * (ux[ix] - ux[ix+1]) +
-            dtcdx2  * (f [ix] - f [ix+1]);
-    for (int ix = xlo; ix < xhi; ++ix)
-        d[ix] =
-            0.0625f * (uy[ix] + uy[ix+1]) +
-            dtcdy2  * (g [ix] + g [ix+1]);
+    //int ntmp = (xhi-xlo) + nthreads-(xhi-xlo)%nthreads;
+    //for (int iix = threadIdx.x/nthreads*ntmp; iix < (threadIdx.x+1)/nthreads*ntmp; ++iix) {
+    for (int ix = xlo+threadIdx.x; ix < xhi; ix+=blockDim.x) {
+	//int ix = xlo + iix;
+        //if (ix < xhi) {
+	    s[ix] =
+                0.2500f * (u [ix] + u [ix+1]) +
+                0.0625f * (ux[ix] - ux[ix+1]) +
+                dtcdx2  * (f [ix] - f [ix+1]);
+	//}
+    }
+    //for (int iix = threadIdx.x/nthreads*ntmp; iix < (threadIdx.x+1)/nthreads*ntmp; ++iix) {
+    for (int ix = xlo+threadIdx.x; ix < xhi; ix+=blockDim.x) {
+        //int ix = xlo + iix;
+        //if (ix < xhi) {
+	    d[ix] =
+        	0.0625f * (uy[ix] + uy[ix+1]) +
+        	dtcdy2  * (g [ix] + g [ix+1]);
+	//}
+    }
 }
 
 
 // Corrector
 static
-__device__
+__global__
 void central2d_correct(float* __restrict__ v,
                        float* __restrict__ scratch,
                        const float* __restrict__ u,
                        const float* __restrict__ f,
                        const float* __restrict__ g,
-                       float dtcdx2, float dtcdy2,
+                       float * d_dtcdx2, float * d_dtcdy2,
                        int xlo, int xhi, int ylo, int yhi,
                        int nx, int ny, int nfield)
 {
     assert(0 <= xlo && xlo < xhi && xhi <= nx);
     assert(0 <= ylo && ylo < yhi && yhi <= ny);
+
+    float dtcdx2 = *d_dtcdx2; float dtcdy2 = *d_dtcdy2;
 
     float* __restrict__ ux = scratch;
     float* __restrict__ uy = scratch +   nx;
@@ -304,10 +338,13 @@ void central2d_correct(float* __restrict__ v,
         const float* __restrict__ gk = g + k*ny*nx;
 
         limited_deriv1(ux+1, uk+ylo*nx+1, nx-2);
+	__syncthreads();
         limited_derivk(uy+1, uk+ylo*nx+1, nx-2, nx);
-        central2d_correct_sd(s1, d1, ux, uy,
+        __syncthreads();
+	central2d_correct_sd(s1, d1, ux, uy,
                              uk + ylo*nx, fk + ylo*nx, gk + ylo*nx,
                              dtcdx2, dtcdy2, xlo, xhi);
+	__syncthreads();
 
         for (int iy = ylo; iy < yhi; ++iy) {
 
@@ -316,53 +353,74 @@ void central2d_correct(float* __restrict__ v,
             tmp = d0; d0 = d1; d1 = tmp;
 
             limited_deriv1(ux+1, uk+(iy+1)*nx+1, nx-2);
+	    __syncthreads();
             limited_derivk(uy+1, uk+(iy+1)*nx+1, nx-2, nx);
-            central2d_correct_sd(s1, d1, ux, uy,
+            __syncthreads();
+	    central2d_correct_sd(s1, d1, ux, uy,
                                  uk + (iy+1)*nx, fk + (iy+1)*nx, gk + (iy+1)*nx,
                                  dtcdx2, dtcdy2, xlo, xhi);
-
-            for (int ix = xlo; ix < xhi; ++ix)
-                vk[iy*nx+ix] = (s1[ix]+s0[ix])-(d1[ix]-d0[ix]);
-        }
+	    __syncthreads();
+	    //int ntmp = (xhi-xlo) + nthreads-(xhi-xlo)%nthreads;
+            for (int ix = xlo+threadIdx.x; ix < xhi; ix+=blockDim.x) {
+	    //for (int iix = threadIdx.x/nthreads*ntmp; iix < (threadIdx.x+1)/nthreads*ntmp; ++iix) {
+        	//int ix = xlo + iix;
+        	//if (ix < xhi) {
+                    vk[iy*nx+ix] = (s1[ix]+s0[ix])-(d1[ix]-d0[ix]);
+        	//}
+	    }
+	    __syncthreads();
+	}
     }
 }
 
 
-__global__
+//__global__
 void central2d_step(float* __restrict__ u, float* __restrict__ v,
                     float* __restrict__ scratch,
                     float* __restrict__ f,
                     float* __restrict__ g,
                     int io, int nx, int ny, int ng,
                     int nfield, flux_t flux, speed_t speed,
-                    float * d_dt, float dx, float dy)
+                    float dt, float dx, float dy,
+		    float * d_dtcdx2, float * d_dtcdy2)
 {
-    float dt = *d_dt;
     int nx_all = nx + 2*ng;
     int ny_all = ny + 2*ng;
 
     float dtcdx2 = 0.5 * dt / dx;
     float dtcdy2 = 0.5 * dt / dy;
 
-    //printf("before flux\n");
-    shallow2d_flux(f, g, u, nx_all * ny_all, nx_all * ny_all);
+    cudaMemcpy(d_dtcdx2, &dtcdx2, sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_dtcdy2, &dtcdy2, sizeof(float), cudaMemcpyHostToDevice);
+    //printf("dtcdx host to device:\t%s\n", cudaGetErrorString(cudaGetLastError()));
 
-    //printf("before predict\n");
-    central2d_predict(v, scratch, u, f, g, dtcdx2, dtcdy2,
+    shallow2d_flux <<< nblocks,nthreads >>> (f, g, u, nx_all * ny_all, nx_all * ny_all);
+    //printf("flux:\t%s\n", cudaGetErrorString(cudaGetLastError()));
+    cudaDeviceSynchronize();
+    //printf("flux sync:\t%s\n", cudaGetErrorString(cudaGetLastError()));
+    
+    central2d_predict <<< nblocks,nthreads >>> (v, scratch, u, f, g, d_dtcdx2, d_dtcdy2,
                       nx_all, ny_all, nfield);
+    //printf("predict:\t%s\n", cudaGetErrorString(cudaGetLastError()));
+    cudaDeviceSynchronize();
+    //printf("predict sync:\t%s\n", cudaGetErrorString(cudaGetLastError()));
 
     // Flux values of f and g at half step
-    //printf("before flux loop \n");
     for (int iy = 1; iy < ny_all-1; ++iy) {
         int jj = iy*nx_all+1;
-        shallow2d_flux(f+jj, g+jj, v+jj, nx_all-2, nx_all * ny_all);
+        shallow2d_flux <<< nblocks,nthreads >>> (f+jj, g+jj, v+jj, nx_all-2, nx_all * ny_all);
+        cudaDeviceSynchronize();
     }
+    //printf("after flux loop:\t%s\n", cudaGetErrorString(cudaGetLastError()));
 
     //printf("before correct\n");
-    central2d_correct(v+io*(nx_all+1), scratch, u, f, g, dtcdx2, dtcdy2,
+    central2d_correct <<< nblocks,nthreads >>> (v+io*(nx_all+1), scratch, u, f, g, d_dtcdx2, d_dtcdy2,
                       ng-io, nx+ng-io,
                       ng-io, ny+ng-io,
                       nx_all, ny_all, nfield);
+    //printf("correct:\t%s\n", cudaGetErrorString(cudaGetLastError()));
+    cudaDeviceSynchronize();
+    //printf("correct sync:\t%s\n", cudaGetErrorString(cudaGetLastError()));
 }
 
 __global__
@@ -394,66 +452,66 @@ int central2d_xrun(float* __restrict__ u, float* __restrict__ v,
                    float* __restrict__ g,
                    int nx, int ny, int ng,
                    int nfield, flux_t flux, speed_t speed,
-                   double tfinal, float dx, float dy, float cfl)
+                   double tfinal, float dx, float dy, float cfl,
+		   float * d_cxy, float * d_dtcdx2, float * d_dtcdy2)
 {
     int nstep = 0;
     int nx_all = nx + 2*ng;
     int ny_all = ny + 2*ng;
     bool done = false;
     float t = 0;
-    float * d_cxy; cudaMalloc((void **)&d_cxy, 2*sizeof(float));
-    float * d_dt; cudaMalloc((void **)&d_dt, sizeof(float));
     while (!done) {
         float cxy[2] = {1.0e-15f, 1.0e-15f};
+	float cxi = cxy[0]; float cyi = cxy[1];
+	for (int ith = 0; ith < nthreads; ++ith) {
+	    cudaMemcpy(d_cxy+2*ith,&cxy,2*sizeof(float),cudaMemcpyHostToDevice);
+        }
+	//printf("cxy host to device:\t%s\n", cudaGetErrorString(cudaGetLastError()));
+
 	central2d_periodic<<<1,1>>>(u, nx, ny, ng, nfield);
-	printf("periodic:\t%s\n", cudaGetErrorString(cudaGetLastError()));
+	//printf("periodic:\t%s\n", cudaGetErrorString(cudaGetLastError()));
 	cudaDeviceSynchronize();
-	printf("periodic sync:\t%s\n", cudaGetErrorString(cudaGetLastError()));
+	//printf("periodic sync:\t%s\n", cudaGetErrorString(cudaGetLastError()));
 
-	cudaMemcpy(d_cxy,&cxy,2*sizeof(float),cudaMemcpyHostToDevice);
-	printf("cxy host to device:\t%s\n", cudaGetErrorString(cudaGetLastError()));
-
-	central2d_speed<<<1,1>>>(speed, d_cxy, u, nx_all * ny_all, nx_all * ny_all);
-        printf("speed:\t%s\n", cudaGetErrorString(cudaGetLastError()));
+	central2d_speed <<< nblocks,nthreads >>> (speed, d_cxy, u, nx_all * ny_all, nx_all * ny_all);
+        //printf("speed:\t%s\n", cudaGetErrorString(cudaGetLastError()));
 	cudaDeviceSynchronize();
-	printf("speed sync:\t%s\n", cudaGetErrorString(cudaGetLastError()));	
+	//printf("speed sync:\t%s\n", cudaGetErrorString(cudaGetLastError()));	
 
-	cudaMemcpy(&cxy,d_cxy,2*sizeof(float),cudaMemcpyDeviceToHost);
-	printf("cxy device to host:\t%s\n", cudaGetErrorString(cudaGetLastError()));
+	for (int ith = 0; ith < nthreads; ++ith) {
+            cudaMemcpy(&cxi, d_cxy+2*ith  ,sizeof(float),cudaMemcpyDeviceToHost);
+	    cudaMemcpy(&cyi, d_cxy+2*ith+1,sizeof(float),cudaMemcpyDeviceToHost);
+            if (cxy[0] < cxi) cxy[0] = cxi; //printf("cxi %e\n",cxi);
+	    if (cxy[1] < cyi) cxy[1] = cyi; //printf("cyi %e\n",cyi);
+	}
+	//printf("speed memcpy loop:\t%s\n", cudaGetErrorString(cudaGetLastError()));
 
 	float dt = cfl / fmaxf(cxy[0]/dx, cxy[1]/dy);
 	if (t + 2*dt >= tfinal) {
             dt = (tfinal-t)/2;
             done = true;
         }
-	cudaMemcpy(d_dt, &dt, sizeof(float), cudaMemcpyHostToDevice);
-	central2d_step<<<1,1>>>(u, v, scratch, f, g,
+	central2d_step(u, v, scratch, f, g,
                        0, nx+4, ny+4, ng-2,
                        nfield, flux, speed,
-                       d_dt, dx, dy);
-	printf("1st step:\t%s\n", cudaGetErrorString(cudaGetLastError()));
-	cudaDeviceSynchronize();
-	printf("1st step sync:\t%s\n", cudaGetErrorString(cudaGetLastError()));
+                       dt, dx, dy, d_dtcdx2, d_dtcdy2);
 
-        central2d_step<<<1,1>>>(v, u, scratch, f, g,
+        central2d_step(v, u, scratch, f, g,
                        1, nx, ny, ng,
                        nfield, flux, speed,
-                       d_dt, dx, dy);
-	printf("2nd step:\t%s\n", cudaGetErrorString(cudaGetLastError()));
-	cudaDeviceSynchronize();
-	printf("2nd step sync:\t%s\n", cudaGetErrorString(cudaGetLastError()));
+                       dt, dx, dy, d_dtcdx2, d_dtcdy2);
 	t += 2*dt;
         nstep += 2;
     }
-    cudaFree(d_cxy); cudaFree(d_dt);
     return nstep;
 }
 
-int central2d_run(central2d_t* sim, double tfinal)
+int central2d_run(central2d_t* sim, double tfinal, float * d_cxy, float * d_dtcdx2, float * d_dtcdy2)
 {
     return central2d_xrun(sim->u, sim->v, sim->scratch,
                           sim->f, sim->g,
                           sim->nx, sim->ny, sim->ng,
                           sim->nfield, sim->flux, sim->speed,
-                          tfinal, sim->dx, sim->dy, sim->cfl);
+                          tfinal, sim->dx, sim->dy, sim->cfl,
+			  d_cxy, d_dtcdx2, d_dtcdy2);
 }
