@@ -323,7 +323,6 @@ void central2d_correct(float* __restrict__ v,
         central2d_correct_sd(s1, d1, ux, uy,
                              uk + ylo*nx, fk + ylo*nx, gk + ylo*nx,
                              dtcdx2, dtcdy2, xlo, xhi);
-	__syncthreads();
 
         for (int iy = ylo; iy < yhi; ++iy) {
 
@@ -336,7 +335,6 @@ void central2d_correct(float* __restrict__ v,
             central2d_correct_sd(s1, d1, ux, uy,
                                  uk + (iy+1)*nx, fk + (iy+1)*nx, gk + (iy+1)*nx,
                                  dtcdx2, dtcdy2, xlo, xhi);
-	    __syncthreads();
 
             for (int ix = xlo; ix < xhi; ++ix)
                 vk[iy*nx+ix] = (s1[ix]+s0[ix])-(d1[ix]-d0[ix]);
