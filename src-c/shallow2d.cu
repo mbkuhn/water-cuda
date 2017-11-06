@@ -2,8 +2,8 @@
 #include <math.h>
 #include <stdio.h>
 
-#define nblocks 1
-#define nthreads 32
+//#define nblocks 1
+//#define nthreads 256
 
 //ldoc on
 /**
@@ -50,7 +50,7 @@ void shallow2dv_flux(float* __restrict__ fh,
             ghv[i] = hvi*hvi*inv_h + (0.5f*g)*hi*hi;
 	//}
     }
-    __syncthreads();
+    //__syncthreads();
 }
 
 

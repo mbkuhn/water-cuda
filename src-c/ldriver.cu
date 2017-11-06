@@ -1,5 +1,6 @@
 #include "stepper.h"
 #include "shallow2d.h"
+#define SYSTIME =1
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -15,7 +16,9 @@
 #include <stdio.h>
 
 #define nblocks 1
-#define nthreads 32
+#define nthreads 1024 
+
+#define makevid 0
 
 //ldoc on
 /**
@@ -223,9 +226,9 @@ int run_sim(lua_State* L)
                                       3, shallow2d_flux, shallow2d_speed, cfl);
     lua_init_sim(L,sim);
     printf("%g %g %d %d %g %d %g\n", w, h, nx, ny, cfl, frames, ftime);
-    //FILE* viz = viz_open(fname, sim);
+    //if (makevid == 1) FILE* viz = viz_open(fname, sim);
     solution_check(sim);
-    //viz_frame(viz, sim);
+    //if (makevid == 1) viz_frame(viz, sim);
 
     float * d_cxy; cudaMalloc((void **)&d_cxy, 2*nthreads*sizeof(float));
     float * d_dtcdx2; cudaMalloc((void**) &d_dtcdx2,sizeof(float));
@@ -244,24 +247,20 @@ int run_sim(lua_State* L)
         gettimeofday(&t1, NULL);
         double elapsed = (t1.tv_sec-t0.tv_sec) + (t1.tv_usec-t0.tv_usec)*1e-6;
 #else
-	printf("ftime %e\n", ftime);
 	int nstep = central2d_run(sim,ftime, d_cxy,d_dtcdx2,d_dtcdy2);
 	double elapsed = 0;
-	printf("nstep %d\n",nstep);
 #endif
         solution_check(sim);
         tcompute += elapsed;
         printf("  Time: %e (%e for %d steps)\n", elapsed, elapsed/nstep, nstep);
-        //viz_frame(viz, sim);
+        //if (makevid ==1) viz_frame(viz, sim);
     }
     printf("Total compute time: %e\n", tcompute);
 
 
     cudaFree(d_cxy);cudaFree(d_dtcdx2);cudaFree(d_dtcdy2);
-    //viz_close(viz);
-    printf("Before 2d_free\n");
+    //if (makevid ==1) viz_close(viz);
     central2d_free(sim);
-    printf("after 2d_free\n");
     return 0;
 }
 

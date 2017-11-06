@@ -9,7 +9,7 @@
 #include <stdio.h>
 
 #define nblocks 1
-#define nthreads 32
+#define nthreads 1024 
 
 //ldoc on
 /**
@@ -55,10 +55,8 @@ central2d_t* central2d_init(float w, float h, int nx, int ny,
 
 void central2d_free(central2d_t* sim)
 {
-    printf("before first cudaFree\n");
     cudaFree(sim->u);
     //free(sim->u);
-    printf("before second cudaFree\n");
     cudaFree(sim);
     //free(sim);
 }
@@ -409,8 +407,8 @@ void central2d_step(float* __restrict__ u, float* __restrict__ v,
     for (int iy = 1; iy < ny_all-1; ++iy) {
         int jj = iy*nx_all+1;
         shallow2d_flux <<< nblocks,nthreads >>> (f+jj, g+jj, v+jj, nx_all-2, nx_all * ny_all);
-        cudaDeviceSynchronize();
     }
+    cudaDeviceSynchronize();
     //printf("after flux loop:\t%s\n", cudaGetErrorString(cudaGetLastError()));
 
     //printf("before correct\n");
