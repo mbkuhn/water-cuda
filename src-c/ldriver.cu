@@ -16,7 +16,7 @@
 #include <stdio.h>
 
 #define nblocks 1
-#define nthreads 1024 
+#define nthreads 64 
 
 #define makevid 0
 
@@ -41,15 +41,11 @@
 
 void solution_check(central2d_t* sim)
 {
-    //printf("beginning of solution_check\n");
     int nx = sim->nx, ny = sim->ny;
-    //printf("before u pointer is defined\n");
     float* u = sim->u;
     float h_sum = 0, hu_sum = 0, hv_sum = 0;
-    //printf("before first u access\n");
     float hmin = u[central2d_offset(sim,0,0,0)];
     float hmax = hmin;
-    //printf("before solution check loop\n");
     for (int j = 0; j < ny; ++j)
         for (int i = 0; i < nx; ++i) {
             float h = u[central2d_offset(sim,0,i,j)];

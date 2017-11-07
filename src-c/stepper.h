@@ -107,7 +107,7 @@ int central2d_run(central2d_t* sim, double tfinal, float * d_cxy, float * d_dtcd
  * for applying the BCs.
  *
  */
-__global__
+//__global__
 void central2d_periodic(float* u, int nx, int ny, int ng, int nfield);
 
 //ldoc off
